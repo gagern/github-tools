@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 
 import argparse
 import base64
@@ -6,8 +6,9 @@ import email.utils
 import io
 import json
 import os.path
-import requests
 import sys
+import urllib.error
+import urllib.request
 
 
 class FormDataItem(object):
@@ -72,14 +73,14 @@ class FormData(object):
 
     def get_boundary(self):
         while self.boundary is None:
-            boundary = b'-=' + base64.urlsafe_b64encode(os.urandom(15)) + b'=-'
+            boundary = b'-=' + base64.urlsafe_b64encode(os.urandom(30)) + b'=-'
             if not any(boundary in part for part in self.parts):
                 self.boundary = boundary
         return self.boundary
 
     def get_content_type(self):
         return ('multipart/form-data; boundary="{}"'
-                .format(self.get_boundary()))
+                .format(self.get_boundary().decode('ascii')))
 
     def http_headers(self):
         return {'Content-Type': self.get_content_type()}
@@ -97,40 +98,40 @@ class FormData(object):
         return b.getvalue()
 
 
-req_config = {'verbose': sys.stderr}
-
 def upload(owner, password, repo, path, description=None, mimetype=None):
     with open(path, 'rb') as fd:
         data = fd.read()
     filename = os.path.basename(path)
     tmpnam = path + '.upload.tmp'
     if os.path.exists(tmpnam):
-        with open(tmpnam, 'rb') as f:
-            r = f.read()
-        resp = json.loads(r)
+        with open(tmpnam, 'r', encoding='utf-8') as f:
+            resp = f.read()
     else:
         req = dict(name=filename, size=len(data))
         if description is not None:
             req['description'] = description
         if mimetype is not None:
             req['content_type'] = mimetype
+        body = json.dumps(req).encode('ascii')
         url = 'https://api.github.com/repos/{}/{}/downloads'
         url = url.format(owner, repo)
-        body = json.dumps(req).encode('ascii')
-        headers = {'Content-Type': 'application/json'}
-        r = requests.post(
-            url,
-            config=req_config,
-            data=body,
-            headers=headers,
-            auth=(owner, password),
-            )
-        r.raise_for_status()
-        print('Preparing {}: {} {}'.format(filename, r.status_code, r.reason))
-        with open(tmpnam, 'wb') as f:
-            f.write(r.content)
-        print(r.text)
-        resp = r.json
+        auth = owner + ':' + password
+        auth = base64.b64encode(auth.encode('utf-8'))
+        auth = auth.decode('ascii').replace('\n', '')
+        headers = {'Content-Type': 'application/json',
+                   'Authorization': 'Basic ' + auth,
+                   }
+        req = urllib.request.Request(url, body, headers)
+        with urllib.request.urlopen(req) as con:
+            resp = con.read()
+            cs = con.info().get_param('charset', 'ascii')
+            resp = resp.decode(cs)
+            print('Preparing {}: {} {}'.format(
+                    filename, con.status, con.reason))
+        with open(tmpnam, 'w', encoding='utf-8') as f:
+            f.write(resp)
+    #sys.stdout.write(resp + '\n')
+    resp = json.loads(resp)
     resp['sas'] = 201
     mapping = [
         ('key', 'path'),
@@ -150,14 +151,17 @@ def upload(owner, password, repo, path, description=None, mimetype=None):
     url = resp['s3_url']
     body = fd.http_body()
     headers = fd.http_headers()
-    r = requests.post(
-        url,
-        config=req_config,
-        data=body,
-        headers=headers,
-        )
-    r.raise_for_status()
-    print('Uploading {}: {} {}'.format(filename, r.status_code, r.reason))
+    req = urllib.request.Request(url, body, headers)
+    try:
+        with urllib.request.urlopen(req) as con:
+            print('Uploading {}: {} {}'.format(
+                    filename, con.status, con.reason))
+    except urllib.error.HTTPError as e:
+        sys.stderr.write('URL: {}\n'.format(url))
+        sys.stderr.write('HTTP error document:\n')
+        sys.stderr.buffer.write(e.fp.read() + b'\n')
+        raise
+    print(resp['html_url'])
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Upload files for GitHub')
