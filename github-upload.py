@@ -56,7 +56,7 @@ class FormData(object):
     def setText(self, name, value):
         part = FormDataItem(name, value.encode('utf-8'))
         part.add_header('Content-Type', 'text/plain', charset='utf-8')
-        part.add_header('Content-Transfer-Encoding', '8bit')
+        part.add_header('Content-Transfer-Encoding', 'binary')
         self.parts.append(part)
         return part
 
