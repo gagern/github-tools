@@ -98,6 +98,16 @@ class FormData(object):
         return b.getvalue()
 
 
+def myurlopen(req):
+    try:
+        return urllib.request.urlopen(req)
+    except urllib.error.HTTPError as e:
+        sys.stderr.write('URL: {}\n'.format(req.full_url))
+        sys.stderr.write('HTTP error document:\n')
+        sys.stderr.buffer.write(e.fp.read() + b'\n')
+        raise
+
+
 def upload(owner, password, repo, path, description=None, mimetype=None):
     with open(path, 'rb') as fd:
         data = fd.read()
@@ -122,7 +132,7 @@ def upload(owner, password, repo, path, description=None, mimetype=None):
                    'Authorization': 'Basic ' + auth,
                    }
         req = urllib.request.Request(url, body, headers)
-        with urllib.request.urlopen(req) as con:
+        with myurlopen(req) as con:
             resp = con.read()
             cs = con.info().get_param('charset', 'ascii')
             resp = resp.decode(cs)
@@ -152,15 +162,9 @@ def upload(owner, password, repo, path, description=None, mimetype=None):
     body = fd.http_body()
     headers = fd.http_headers()
     req = urllib.request.Request(url, body, headers)
-    try:
-        with urllib.request.urlopen(req) as con:
-            print('Uploading {}: {} {}'.format(
-                    filename, con.status, con.reason))
-    except urllib.error.HTTPError as e:
-        sys.stderr.write('URL: {}\n'.format(url))
-        sys.stderr.write('HTTP error document:\n')
-        sys.stderr.buffer.write(e.fp.read() + b'\n')
-        raise
+    with myurlopen(req) as con:
+        print('Uploading {}: {} {}'.format(
+                filename, con.status, con.reason))
     print(resp['html_url'])
 
 if __name__ == '__main__':
