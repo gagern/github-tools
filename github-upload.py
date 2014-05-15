@@ -1,66 +1,10 @@
 #!/usr/bin/python3
 
 import argparse
-import base64
-import json
 import os.path
-import sys
-import urllib.error
-import urllib.request
+import urllib.parse
 
-# Create access-token file using https://github.com/settings/applications
-# and store it in a file "access-token" in the same directory as this script
-access_token = None
-
-def readAccessToken():
-    global access_token
-    fn = __file__
-    while access_token is None:
-        atn = os.path.join(os.path.dirname(fn), 'access-token')
-        if os.path.exists(atn):
-            with open(atn, 'r') as f:
-                access_token = f.read().strip()
-                return
-        if not os.path.islink(fn):
-            break
-        fn = os.path.join(os.path.dirname(fn), os.readlink(fn))
-
-def myurlopen(req):
-    try:
-        return urllib.request.urlopen(req)
-    except urllib.error.HTTPError as e:
-        sys.stderr.write('URL: {}\n'.format(req.full_url))
-        sys.stderr.write('HTTP error document:\n')
-        sys.stderr.buffer.write(e.fp.read() + b'\n')
-        raise
-
-def authHeader():
-    if access_token is not None:
-        return 'token ' + access_token
-    elif args.password is not None:
-        auth = owner + ':' + args.password
-        auth = base64.b64encode(auth.encode('utf-8'))
-        auth = auth.decode('ascii').replace('\n', '')
-        return auth
-    else:
-        print('No authorization available, specify --password or create token',
-              file=sys.stderr)
-        sys.exit(2)
-    
-def jsonDialog(url, body=None, headers=None, method=None):
-    if isinstance(body, (dict, list)):
-        body = json.dumps(body).encode('ascii')
-    if headers is None:
-        headers = dict()
-    headers.setdefault('Content-Type', 'application/json')
-    headers['Authorization'] = authHeader()
-    req = urllib.request.Request(url, data=body, headers=headers, method=method)
-    with myurlopen(req) as con:
-        resp = con.read()
-        cs = con.info().get_param('charset', 'ascii')
-        resp = resp.decode(cs)
-    resp = json.loads(resp)
-    return resp
+from gagern.githubtools.common import readAccessToken, jsonDialog
 
 def chooseRelease():
     url = 'https://api.github.com/repos/{owner}/{repo}/releases'
@@ -115,5 +59,5 @@ if __name__ == '__main__':
                         default=None)
     parser.add_argument('file')
     args = parser.parse_args()
-    readAccessToken()
+    readAccessToken(args.password)
     upload()
