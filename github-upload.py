@@ -47,7 +47,7 @@ def authHeader():
               file=sys.stderr)
         sys.exit(2)
     
-def jsonDialog(url, body=None, method=None, headers=None):
+def jsonDialog(url, body=None, headers=None, method=None):
     if isinstance(body, (dict, list)):
         body = json.dumps(body).encode('ascii')
     if headers is None:
@@ -95,7 +95,7 @@ def upload():
     if args.description is not None:
         body['label'] = args.description
     url = resp['url']
-    jsonDialog(url, body, method='PATCH')
+    jsonDialog(url, body) # method='PATCH' ?
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Upload files for GitHub')
