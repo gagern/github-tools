@@ -2,6 +2,7 @@
 
 import argparse
 import os.path
+import sys
 import urllib.parse
 
 from gagern.githubtools.common import readAccessToken, jsonDialog
@@ -39,7 +40,7 @@ def upload():
     if args.description is not None:
         body['label'] = args.description
     url = resp['url']
-    jsonDialog(url, body) # method='PATCH' ?
+    jsonDialog(url, body, method='PATCH')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Upload files for GitHub')
